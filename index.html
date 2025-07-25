@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>VaultLite X</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+  --bg-color: #0f172a;
+  --text-color: #f1f5f9;
+  --input-bg: #1e293b;
+  --accent: #38bdf8;
+  --button-bg: #38bdf8;
+  --button-text: #0f172a;
+  --entry-bg: #1e293b;
+  --danger: #ef4444;
+}
+
+.light {
+  --bg-color: #f8fafc;
+  --text-color: #0f172a;
+  --input-bg: #e2e8f0;
+  --accent: #0ea5e9;
+  --button-bg: #0ea5e9;
+  --button-text: #f8fafc;
+  --entry-bg: #e2e8f0;
+  --danger: #dc2626;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-color);
+  color: var(--text-color);
+  padding: 20px;
+  transition: all 0.3s ease-in-out;
+}
+
+h1, h2 {
+  color: var(--accent);
+}
+
+input, button {
+  display: block;
+  margin: 10px 0;
+  padding: 10px;
+  font-size: 1em;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-color);
+}
+
+input::placeholder {
+  color: #94a3b8;
+}
+
+button {
+  background: var(--button-bg);
+  color: var(--button-text);
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.2s;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.entry {
+  background: var(--entry-bg);
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 6px;
+  position: relative;
+}
+
+.entry button {
+  display: inline-block;
+  margin: 5px 5px 0 0;
+  width: auto;
+  font-size: 0.9em;
+  padding: 5px 10px;
+}
+
+footer {
+  margin-top: 30px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#strengthOutput {
+  font-size: 0.9em;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+#lockScreen {
+  max-width: 500px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+#vaultApp {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+  </style>
+</head>
+<body>
+
+<div id="lockScreen">
+  <h1>🔐 VaultLite X</h1>
+  <p>Enter your master password to unlock</p>
+  <input type="password" id="unlockInput" placeholder="Master Password" />
+  <button onclick="unlock()">Unlock Vault</button>
+  <br><br>
+  <button onclick="resetVault()" style="background:red;color:white;">Reset Vault</button>
+</div>
+
+<div id="vaultApp" style="display:none;">
+  <header>
+    <h1>VaultLite X</h1>
+    <button onclick="lock()">🔒 Lock</button>
+    <button onclick="toggleTheme()">🌓 Toggle Theme</button>
+  </header>
+
+  <section>
+    <h2>Add New Entry</h2>
+    <input type="text" id="siteInput" placeholder="Site Name" />
+    <input type="text" id="usernameInput" placeholder="Username/Email" />
+    <input type="password" id="passwordInput" placeholder="Password" />
+    <div>
+      <button onclick="generatePassword()">Generate Password</button>
+      <span id="strengthOutput"></span>
+    </div>
+    <button onclick="addEntry()">Add Entry</button>
+  </section>
+
+  <section>
+    <h2>Saved Entries</h2>
+    <input type="text" id="searchInput" placeholder="Search..." oninput="renderEntries()" />
+    <div id="entryList"></div>
+  </section>
+
+  <footer>
+    <button onclick="exportVault()">⬇ Export Vault</button>
+    <input type="file" id="importFile" />
+    <button onclick="importVault()">⬆ Import Vault</button>
+  </footer>
+</div>
+
+<script>
+    let vaultKey = "";
+const vaultKeyName = "vaultlitex_data";
+
+function xorEncrypt(text, key) {
+  return btoa([...text].map((c, i) => 
+    String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))
+  ).join(''));
+}
+
+function xorDecrypt(encoded, key) {
+  try {
+    const text = atob(encoded);
+    return [...text].map((c, i) => 
+      String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))
+    ).join('');
+  } catch {
+    return "ERROR";
+  }
+}
+
+function unlock() {
+  const input = document.getElementById("unlockInput").value.trim();
+  if (!input) return alert("Enter a master password.");
+  vaultKey = input;
+
+  // Try decrypting stored data
+  const raw = localStorage.getItem(vaultKeyName);
+  if (raw) {
+    const test = JSON.parse(raw);
+    if (xorDecrypt(test[0]?.site, vaultKey) === "ERROR") {
+      alert("Wrong password or corrupted vault!");
+      return;
+    }
+  }
+
+  document.getElementById("lockScreen").style.display = "none";
+  document.getElementById("vaultApp").style.display = "block";
+  renderEntries();
+}
+
+function lock() {
+  vaultKey = "";
+  document.getElementById("lockScreen").style.display = "block";
+  document.getElementById("vaultApp").style.display = "none";
+  document.getElementById("unlockInput").value = "";
+}
+
+function getVaultData() {
+  return JSON.parse(localStorage.getItem(vaultKeyName) || "[]");
+}
+
+function saveVaultData(data) {
+  localStorage.setItem(vaultKeyName, JSON.stringify(data));
+}
+
+function addEntry() {
+  const site = document.getElementById("siteInput").value.trim();
+  const user = document.getElementById("usernameInput").value.trim();
+  const pass = document.getElementById("passwordInput").value.trim();
+
+  if (!site || !user || !pass) {
+    alert("All fields are required.");
+    return;
+  }
+
+  const entry = {
+    site: xorEncrypt(site, vaultKey),
+    username: xorEncrypt(user, vaultKey),
+    password: xorEncrypt(pass, vaultKey),
+  };
+
+  const data = getVaultData();
+  data.push(entry);
+  saveVaultData(data);
+  clearInputs();
+  renderEntries();
+}
+
+function clearInputs() {
+  document.getElementById("siteInput").value = "";
+  document.getElementById("usernameInput").value = "";
+  document.getElementById("passwordInput").value = "";
+  document.getElementById("strengthOutput").innerText = "";
+}
+
+function renderEntries() {
+  const search = document.getElementById("searchInput").value.toLowerCase();
+  const entries = getVaultData();
+  const container = document.getElementById("entryList");
+  container.innerHTML = "";
+
+  entries.forEach((entry, index) => {
+    const site = xorDecrypt(entry.site, vaultKey);
+    const user = xorDecrypt(entry.username, vaultKey);
+    const pass = xorDecrypt(entry.password, vaultKey);
+
+    if (site.toLowerCase().includes(search)) {
+      const div = document.createElement("div");
+      div.className = "entry";
+      div.innerHTML = `
+        <strong>${site}</strong><br>
+        👤 ${user}<br>
+        🔑 ${pass}<br>
+        <button onclick="copyToClipboard('${user}')">Copy Username</button>
+        <button onclick="copyToClipboard('${pass}')">Copy Password</button>
+        <button onclick="deleteEntry(${index})" style="background:var(--danger);color:white;">Delete</button>
+      `;
+      container.appendChild(div);
+    }
+  });
+
+  if (entries.length === 0) {
+    container.innerHTML = "<p>No entries found.</p>";
+  }
+}
+
+function deleteEntry(index) {
+  const data = getVaultData();
+  if (!confirm("Delete this entry?")) return;
+  data.splice(index, 1);
+  saveVaultData(data);
+  renderEntries();
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert("Copied!");
+  });
+}
+
+function resetVault() {
+  if (confirm("This will delete all saved data. Are you sure?")) {
+    localStorage.removeItem(vaultKeyName);
+    location.reload();
+  }
+}
+
+function toggleTheme() {
+  document.body.classList.toggle("light");
+}
+
+</script>
+
+</body>
+</html>
